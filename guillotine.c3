@@ -409,11 +409,8 @@ fn void Label.draw(Label* self, Guillotine* gui, Area area) @dynamic {
 }
 
 fn Label*! Guillotine.label(Guillotine* gui, String text, float size = 16.0, Color color = {0.0, 0.0, 0.0, 1.0}) {
-    io::printn("Creating label");
     blend2d::BLFontFaceCore* fontface = gui.fontManager.query(gui.fontManager.defaultFont);
     blend2d::BLFontCore* font = mem::new(blend2d::BLFontCore);
-
-    io::printn("Got fontface");
 
     BLResult result = blend2d::font::init(font);
     if (result != blend2d::BL_SUCCESS) {
