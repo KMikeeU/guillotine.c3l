@@ -19,12 +19,83 @@ struct Area {
     int[<2>] size;
 }
 
+struct FontManager {
+    BLFontManagerCore* blfontManager;
+    String defaultFont;
+}
+
+fn void! FontManager.init(FontManager* self) {
+    BLResult result;
+    self.blfontManager = mem::new(BLFontManagerCore);
+
+    result = blend2d::font_manager::init(self.blfontManager);
+    if (result != blend2d::BL_SUCCESS) {
+        io::printn("Failed to init font manager");
+        return GuillotineFault.BLEND2D_FAILED?;
+    }
+
+    result = blend2d::font_manager::create(self.blfontManager);
+    if (result != blend2d::BL_SUCCESS) {
+        io::printn("Failed to init font manager");
+        return GuillotineFault.BLEND2D_FAILED?;
+    }
+
+    self.defaultFont = "arial";
+
+    DString fontfilename = dstring::new(self.defaultFont);
+    fontfilename.append(".ttf");
+    defer fontfilename.free();
+
+    // Some default paths according to copilot
+    Path[] searchPaths = {
+        path::new("C:\\Windows\\Fonts")!!,
+        path::new("/usr/share/fonts")!!,
+        path::new("/usr/local/share/fonts")!!,
+        path::new("/usr/share/fonts/truetype")!!,
+        path::new("/usr/local/share/fonts/truetype")!!
+    };
+
+	blend2d::BLFontFaceCore* fontface = mem::new(blend2d::BLFontFaceCore);
+
+    result = blend2d::font_face::init(fontface);
+	if(result != blend2d::BL_SUCCESS) {
+		return GuillotineFault.BLEND2D_FAILED?;
+	}
+
+    foreach (Path path : searchPaths) {
+        String fontPath = path.append(fontfilename.str_view())!!.absolute()!!.str_view();
+        result = blend2d::font_face::create_from_file(fontface, (ZString)fontPath, blend2d::BL_FILE_READ_NO_FLAGS);
+        if (result == blend2d::BL_SUCCESS) {
+            break;
+        }
+    }
+
+    result = blend2d::font_manager::add_face(self.blfontManager, fontface);
+    if (result != blend2d::BL_SUCCESS) {
+        return GuillotineFault.BLEND2D_FAILED?;
+    }
+}
+
+fn blend2d::BLFontFaceCore* FontManager.query(FontManager* self, String fontName) {
+    BLFontFaceCore* fontFace = mem::new(BLFontFaceCore);
+    blend2d::font_face::init(fontFace);
+
+    BLResult result = blend2d::font_manager::query_face(self.blfontManager, (ZString)fontName, fontName.len, &&BLFontQueryProperties{1, 1, 1}, fontFace);
+        
+    if (result != blend2d::BL_SUCCESS) {
+        return null;
+    }
+
+    return fontFace;
+}
 
 struct Guillotine (Parent) {
     glfw::Window* window;
     bool isDebug;
     BLContextCore* ctx;
     BLImageCore* img;
+    FontManager* fontManager;
+
 
     Color clearColor;
     Drawable root;
@@ -48,6 +119,9 @@ fn void! Guillotine.init(Guillotine* self, bool debug = true) {
     self.isDebug = debug;
     self.ctx = mem::new(BLContextCore);
     self.img = mem::new(BLImageCore);
+
+    self.fontManager = mem::new(FontManager);
+    self.fontManager.init()!!;
 
     if(!glfw::init()) {
         return GuillotineFault.GLFW_FAILED?;
@@ -310,4 +384,51 @@ fn void Layout.draw(Layout* self, Guillotine* gui, Area area) @dynamic {
 fn any Layout.with(Layout* self, Drawable child) @dynamic {
     self.children.push(child);
     return (any)self;
+}
+
+
+// -------------
+// Label
+// -------------
+
+struct Label (Drawable) {
+    float size;
+    Color color;
+    String text;
+    BLFontCore* font;
+}
+
+fn void Label.draw(Label* self, Guillotine* gui, Area area) @dynamic {
+    blend2d::context::set_fill_style_rgba(gui.ctx, &&blend2d::BLRgba{
+        self.color.r,
+        self.color.g,
+        self.color.b,
+        self.color.a
+    });
+    blend2d::context::fill_utf8_text_i(gui.ctx, &&BLPointI{area.position[0], area.position[1] + (int)self.size}, self.font, (ZString)self.text, self.text.len);
+}
+
+fn Label*! Guillotine.label(Guillotine* gui, String text, float size = 16.0, Color color = {0.0, 0.0, 0.0, 1.0}) {
+    io::printn("Creating label");
+    blend2d::BLFontFaceCore* fontface = gui.fontManager.query(gui.fontManager.defaultFont);
+    blend2d::BLFontCore* font = mem::new(blend2d::BLFontCore);
+
+    io::printn("Got fontface");
+
+    BLResult result = blend2d::font::init(font);
+    if (result != blend2d::BL_SUCCESS) {
+        return GuillotineFault.BLEND2D_FAILED?;
+    }
+
+    result = blend2d::font::create_from_face(font, fontface, size);
+    if (result != blend2d::BL_SUCCESS) {
+        return GuillotineFault.BLEND2D_FAILED?;
+    }
+
+    Label* label = mem::new(Label);
+    label.color = color;
+    label.size = size;
+    label.text = text;
+    label.font = font;
+    return label;
 }
