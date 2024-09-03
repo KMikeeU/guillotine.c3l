@@ -9,6 +9,7 @@ Not many, but here we go:
   - Background box
   - Container (adds padding to child)
   - Layout (arranges children in a row or column with constraints)
+  - Label (displays text)
 
 
 ## TODO
